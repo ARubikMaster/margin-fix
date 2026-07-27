@@ -1,14 +1,14 @@
 (function (exports, v) {
     "use strict";
 
-    // Pull Discord's core modules using the local 'v' object
     const React = v.metro.common.React;
     const ReactNative = v.metro.common.ReactNative;
+    const { showToast } = v.ui.toasts;
 
-    let unpatch;
+    let unpatchAll;
 
+    // 1. Settings UI
     function Settings() {
-        // Safely initialize storage using the local plugin context
         if (v.plugin.storage.marginSize === undefined) {
             v.plugin.storage.marginSize = 25;
         }
@@ -38,31 +38,52 @@
             React.createElement(ReactNative.Text, { 
                 key: "hint", 
                 style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
-            }, "Change this number to push the server list further right.\n\n⚠️ Note: You must force-close and restart Discord for margin changes to take effect.")
+            }, "⚠️ Note: Most phone screens are only 400 pixels wide. If you set this to 700, you will push the server list completely off the screen! Try 25 or 50 first.")
         ]);
     }
 
+    // 2. Core Plugin
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
+            const patches = [];
             try {
-                const GuildListView = v.metro.findByName("GuildListView", false);
+                // Hook into Revenge's lazy-loader API
+                const bunny = window.bunny || window.revenge;
+                if (!bunny || !bunny.metro || !bunny.metro.findByNameLazy) {
+                    showToast("MarginFix: Missing Lazy Loader API", 1);
+                    return;
+                }
+
+                // Cast a net for every possible name Discord uses for the Server List
+                const targets = ["GuildListView", "Guilds", "GuildList", "NavigableGuilds"];
                 
-                if (GuildListView) {
-                    unpatch = v.patcher.after("default", GuildListView, (args, res) => {
+                targets.forEach(name => {
+                    // Wait in the shadows for the component to load
+                    const lazyProxy = bunny.metro.findByNameLazy(name, false);
+                    
+                    // Apply the patch the millisecond it spawns
+                    const patch = v.patcher.after("default", lazyProxy, (args, res) => {
                         if (res && res.props) {
                             const margin = v.plugin.storage.marginSize ?? 25;
-                            res.props.style = [res.props.style, { marginLeft: margin }];
+                            // Safely append the margin to the existing style array
+                            res.props.style = [res.props.style || {}, { marginLeft: margin }];
                         }
                     });
-                }
+                    
+                    patches.push(patch);
+                });
+
+                unpatchAll = () => patches.forEach(p => p());
+
             } catch (err) {
                 console.error("[MarginFix] Crash prevented:", err);
+                showToast("MarginFix: Patch Failed", 1);
             }
         },
         
         onUnload: () => {
-            if (unpatch) unpatch();
+            if (unpatchAll) unpatchAll();
         }
     };
 
@@ -71,5 +92,4 @@
     
     return exports;
 
-// Notice we dropped 'window.' here so it uses Revenge's injected context!
 })({}, vendetta);
