@@ -3,7 +3,6 @@
 
     const React = v.metro.common.React;
     const ReactNative = v.metro.common.ReactNative;
-    const { showToast } = v.ui.toasts;
 
     let unpatchAll;
 
@@ -33,12 +32,7 @@
                     const num = parseInt(text.replace(/[^0-9]/g, ''));
                     v.plugin.storage.marginSize = isNaN(num) ? 0 : num;
                 }
-            }),
-
-            React.createElement(ReactNative.Text, { 
-                key: "hint", 
-                style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
-            }, "⚠️ Note: Most phone screens are only 400 pixels wide. If you set this to 700, you will push the server list completely off the screen! Try 25 or 50 first.")
+            })
         ]);
     }
 
@@ -48,26 +42,24 @@
         onLoad: () => {
             const patches = [];
             try {
-                // Hook into Revenge's lazy-loader API
                 const bunny = window.bunny || window.revenge;
-                if (!bunny || !bunny.metro || !bunny.metro.findByNameLazy) {
-                    showToast("MarginFix: Missing Lazy Loader API", 1);
-                    return;
-                }
+                if (!bunny || !bunny.metro || !bunny.metro.findByNameLazy) return;
 
-                // Cast a net for every possible name Discord uses for the Server List
                 const targets = ["GuildListView", "Guilds", "GuildList", "NavigableGuilds"];
                 
                 targets.forEach(name => {
-                    // Wait in the shadows for the component to load
                     const lazyProxy = bunny.metro.findByNameLazy(name, false);
                     
-                    // Apply the patch the millisecond it spawns
                     const patch = v.patcher.after("default", lazyProxy, (args, res) => {
-                        if (res && res.props) {
+                        if (res) {
                             const margin = v.plugin.storage.marginSize ?? 25;
-                            // Safely append the margin to the existing style array
-                            res.props.style = [res.props.style || {}, { marginLeft: margin }];
+                            
+                            // THE FIX: Forcefully wrap Discord's component in our own View
+                            return React.createElement(
+                                ReactNative.View, 
+                                { style: { marginLeft: margin, flex: 1 } }, 
+                                res // Shove the original component inside our new margin box
+                            );
                         }
                     });
                     
@@ -77,8 +69,7 @@
                 unpatchAll = () => patches.forEach(p => p());
 
             } catch (err) {
-                console.error("[MarginFix] Crash prevented:", err);
-                showToast("MarginFix: Patch Failed", 1);
+                console.error("[MarginFix] Patch Error:", err);
             }
         },
         
