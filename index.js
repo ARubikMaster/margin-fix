@@ -1,8 +1,9 @@
 (function (exports, v) {
     "use strict";
 
-    let unpatchAll;
+    let unpatch;
 
+    // 1. Settings UI
     function Settings() {
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
@@ -17,7 +18,7 @@
             React.createElement(ReactNative.Text, { 
                 key: "label", 
                 style: { color: "#FFFFFF", fontSize: 16, marginBottom: 8, fontWeight: "bold" } 
-            }, "Server List Offset (Pixels):"),
+            }, "Screen Edge Offset (Pixels):"),
             
             React.createElement(ReactNative.TextInput, {
                 key: "input",
@@ -35,48 +36,43 @@
             React.createElement(ReactNative.Text, { 
                 key: "hint", 
                 style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
-            }, "Uses GPU translation to forcefully slide the server list right, bypassing layout restrictions.")
+            }, "⚠️ This hacks the native Safe Area Insets to trick Discord into thinking your phone has a massive left notch. It completely bypasses Discord's strict layout engine!")
         ]);
     }
 
+    // 2. Core Plugin
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
-            const patches = [];
             try {
-                const bunny = window.bunny || window.revenge;
-                if (!bunny || !bunny.metro || !bunny.metro.findByNameLazy) return;
-
-                // Widen the net to catch the newest unified Discord codebase components
-                const targets = ["GuildsTree", "GuildsNavBar", "GuildListView", "Guilds"];
+                // Find React Native's core Safe Area module
+                const SafeArea = v.metro.findByProps("useSafeAreaInsets");
                 
-                targets.forEach(name => {
-                    const lazyProxy = bunny.metro.findByNameLazy(name, false);
-                    
-                    const patch = v.patcher.after("default", lazyProxy, (args, res) => {
-                        if (res && res.props) {
-                            const margin = v.plugin.storage.marginSize ?? 25;
-                            
-                            // THE FIX: GPU Transform. 
-                            // This translates the pixels AFTER the layout is drawn, making it unblockable.
-                            res.props.style = [
-                                res.props.style || {}, 
-                                { transform: [{ translateX: margin }] }
-                            ];
-                        }
-                    });
-                    
-                    patches.push(patch);
+                if (!SafeArea || !SafeArea.useSafeAreaInsets) {
+                    v.ui.toasts.showToast("MarginFix: SafeArea API not found", 1);
+                    return;
+                }
+
+                // Intercept every time Discord asks the phone where the edges are
+                unpatch = v.patcher.after("useSafeAreaInsets", SafeArea, (args, res) => {
+                    if (res) {
+                        const margin = v.plugin.storage.marginSize ?? 25;
+                        
+                        // Forcefully inject our custom margin into the left boundary
+                        return {
+                            ...res,
+                            left: (res.left || 0) + margin
+                        };
+                    }
+                    return res;
                 });
 
-                unpatchAll = () => patches.forEach(p => p());
-
             } catch (err) {
-                console.error("[MarginFix] Patch error:", err);
+                console.error("[MarginFix] SafeArea patch error:", err);
             }
         },
         onUnload: () => {
-            if (unpatchAll) unpatchAll();
+            if (unpatch) unpatch();
         }
     };
 
