@@ -1,25 +1,23 @@
 (function (exports, vendetta) {
     "use strict";
 
+    // 1. Pull Discord's core modules at the top level so they never fail
+    const React = vendetta.metro.common.React;
+    const ReactNative = vendetta.metro.common.ReactNative;
+    const pluginStorage = vendetta.plugin.storage;
+
     let unpatch;
 
-    // 1. Settings UI Panel using standard React State
+    // 2. The Settings UI
     function Settings() {
-        const React = vendetta?.metro?.common?.React;
-        const ReactNative = vendetta?.metro?.common?.ReactNative;
-        const pluginStorage = vendetta?.plugin?.storage;
-
-        if (!React || !ReactNative || !pluginStorage) return null;
-
-        // Initialize our storage variable if it's completely empty
+        // Guarantee a default value exists
         if (pluginStorage.marginSize === undefined) {
             pluginStorage.marginSize = 25;
         }
 
-        // Use React to hold the text box value so it doesn't crash
         const [marginText, setMarginText] = React.useState(String(pluginStorage.marginSize));
 
-        return React.createElement(ReactNative.View, { style: { padding: 16 } }, [
+        return React.createElement(ReactNative.View, { style: { padding: 16, flex: 1 } }, [
             React.createElement(ReactNative.Text, { 
                 key: "label", 
                 style: { color: "#FFFFFF", fontSize: 16, marginBottom: 8, fontWeight: "bold" } 
@@ -33,9 +31,7 @@
                 placeholderTextColor: "#72767d",
                 value: marginText,
                 onChangeText: (text) => {
-                    // Update the UI
                     setMarginText(text);
-                    // Save the actual number to Revenge's storage
                     const num = parseInt(text.replace(/[^0-9]/g, ''));
                     pluginStorage.marginSize = isNaN(num) ? 0 : num;
                 }
@@ -43,32 +39,27 @@
 
             React.createElement(ReactNative.Text, { 
                 key: "hint", 
-                style: { color: "#b9bbbe", fontSize: 14, marginTop: 8 } 
-            }, "Change this number to push the server list further right. Note: You must fully restart Discord to see the changes take effect.")
+                style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
+            }, "Change this number to push the server list further right.\n\n⚠️ Note: You must force-close and restart Discord for margin changes to take effect.")
         ]);
     }
 
-    // 2. Main Plugin Structure
+    // 3. The Core Plugin Logic
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
-            try {
-                const { metro, patcher, plugin } = vendetta;
-                const GuildListView = metro?.findByName("GuildListView", false);
-                
-                if (GuildListView && patcher) {
-                    unpatch = patcher.after("default", GuildListView, (args, res) => {
-                        if (res && res.props) {
-                            // Safely pull the margin size, default to 25 if something goes wrong
-                            const margin = plugin?.storage?.marginSize ?? 25;
-                            res.props.style = [res.props.style, { marginLeft: margin }];
-                        }
-                    });
-                }
-            } catch (err) {
-                console.error("[MarginFix] Failed to load patch:", err);
+            const GuildListView = vendetta.metro.findByName("GuildListView", false);
+            
+            if (GuildListView) {
+                unpatch = vendetta.patcher.after("default", GuildListView, (args, res) => {
+                    if (res && res.props) {
+                        const margin = pluginStorage.marginSize ?? 25;
+                        res.props.style = [res.props.style, { marginLeft: margin }];
+                    }
+                });
             }
         },
+        
         onUnload: () => {
             if (unpatch) unpatch();
         }
