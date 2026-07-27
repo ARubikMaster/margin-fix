@@ -1,21 +1,21 @@
 (function (exports, vendetta) {
     "use strict";
 
-    // 1. Pull Discord's core modules at the top level so they never fail
-    const React = vendetta.metro.common.React;
-    const ReactNative = vendetta.metro.common.ReactNative;
-    const pluginStorage = vendetta.plugin.storage;
-
     let unpatch;
 
-    // 2. The Settings UI
+    // 1. The Settings UI
     function Settings() {
-        // Guarantee a default value exists
-        if (pluginStorage.marginSize === undefined) {
-            pluginStorage.marginSize = 25;
+        // Grab Discord's internal UI modules ONLY when the gear is clicked
+        const React = vendetta.metro.common.React;
+        const ReactNative = vendetta.metro.common.ReactNative;
+
+        // Initialize storage safely
+        if (vendetta.plugin.storage.marginSize === undefined) {
+            vendetta.plugin.storage.marginSize = 25;
         }
 
-        const [marginText, setMarginText] = React.useState(String(pluginStorage.marginSize));
+        // Use standard React State for the text box
+        const [marginText, setMarginText] = React.useState(String(vendetta.plugin.storage.marginSize));
 
         return React.createElement(ReactNative.View, { style: { padding: 16, flex: 1 } }, [
             React.createElement(ReactNative.Text, { 
@@ -31,9 +31,11 @@
                 placeholderTextColor: "#72767d",
                 value: marginText,
                 onChangeText: (text) => {
+                    // Update what you see typing
                     setMarginText(text);
+                    // Save the math to disk
                     const num = parseInt(text.replace(/[^0-9]/g, ''));
-                    pluginStorage.marginSize = isNaN(num) ? 0 : num;
+                    vendetta.plugin.storage.marginSize = isNaN(num) ? 0 : num;
                 }
             }),
 
@@ -44,19 +46,24 @@
         ]);
     }
 
-    // 3. The Core Plugin Logic
+    // 2. The Core Plugin Logic
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
-            const GuildListView = vendetta.metro.findByName("GuildListView", false);
-            
-            if (GuildListView) {
-                unpatch = vendetta.patcher.after("default", GuildListView, (args, res) => {
-                    if (res && res.props) {
-                        const margin = pluginStorage.marginSize ?? 25;
-                        res.props.style = [res.props.style, { marginLeft: margin }];
-                    }
-                });
+            try {
+                // Grab the UI patcher ONLY when the plugin is toggled on
+                const GuildListView = vendetta.metro.findByName("GuildListView", false);
+                
+                if (GuildListView) {
+                    unpatch = vendetta.patcher.after("default", GuildListView, (args, res) => {
+                        if (res && res.props) {
+                            const margin = vendetta.plugin.storage.marginSize ?? 25;
+                            res.props.style = [res.props.style, { marginLeft: margin }];
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("[MarginFix] Crash prevented:", err);
             }
         },
         
