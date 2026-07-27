@@ -1,21 +1,19 @@
-(function (exports, vendetta) {
+(function (exports, v) {
     "use strict";
+
+    // Pull Discord's core modules using the local 'v' object
+    const React = v.metro.common.React;
+    const ReactNative = v.metro.common.ReactNative;
 
     let unpatch;
 
-    // 1. The Settings UI
     function Settings() {
-        // Grab Discord's internal UI modules ONLY when the gear is clicked
-        const React = vendetta.metro.common.React;
-        const ReactNative = vendetta.metro.common.ReactNative;
-
-        // Initialize storage safely
-        if (vendetta.plugin.storage.marginSize === undefined) {
-            vendetta.plugin.storage.marginSize = 25;
+        // Safely initialize storage using the local plugin context
+        if (v.plugin.storage.marginSize === undefined) {
+            v.plugin.storage.marginSize = 25;
         }
 
-        // Use standard React State for the text box
-        const [marginText, setMarginText] = React.useState(String(vendetta.plugin.storage.marginSize));
+        const [marginText, setMarginText] = React.useState(String(v.plugin.storage.marginSize));
 
         return React.createElement(ReactNative.View, { style: { padding: 16, flex: 1 } }, [
             React.createElement(ReactNative.Text, { 
@@ -31,11 +29,9 @@
                 placeholderTextColor: "#72767d",
                 value: marginText,
                 onChangeText: (text) => {
-                    // Update what you see typing
                     setMarginText(text);
-                    // Save the math to disk
                     const num = parseInt(text.replace(/[^0-9]/g, ''));
-                    vendetta.plugin.storage.marginSize = isNaN(num) ? 0 : num;
+                    v.plugin.storage.marginSize = isNaN(num) ? 0 : num;
                 }
             }),
 
@@ -46,18 +42,16 @@
         ]);
     }
 
-    // 2. The Core Plugin Logic
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
             try {
-                // Grab the UI patcher ONLY when the plugin is toggled on
-                const GuildListView = vendetta.metro.findByName("GuildListView", false);
+                const GuildListView = v.metro.findByName("GuildListView", false);
                 
                 if (GuildListView) {
-                    unpatch = vendetta.patcher.after("default", GuildListView, (args, res) => {
+                    unpatch = v.patcher.after("default", GuildListView, (args, res) => {
                         if (res && res.props) {
-                            const margin = vendetta.plugin.storage.marginSize ?? 25;
+                            const margin = v.plugin.storage.marginSize ?? 25;
                             res.props.style = [res.props.style, { marginLeft: margin }];
                         }
                     });
@@ -77,4 +71,5 @@
     
     return exports;
 
-})({}, window.vendetta);
+// Notice we dropped 'window.' here so it uses Revenge's injected context!
+})({}, vendetta);
