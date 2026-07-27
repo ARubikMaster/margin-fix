@@ -3,26 +3,21 @@
 
     let unpatch;
 
-    // Helper function to safely get or initialize storage
-    function getStorage() {
-        const storage = vendetta?.plugin?.storage || vendetta?.storage;
-        if (storage && storage.marginSize === undefined) {
-            storage.marginSize = 25;
-        }
-        return storage;
-    }
-
-    // 1. Settings UI Panel
+    // 1. Settings UI Panel using standard React State
     function Settings() {
         const React = vendetta?.metro?.common?.React;
         const ReactNative = vendetta?.metro?.common?.ReactNative;
-        const storage = getStorage();
+        const pluginStorage = vendetta?.plugin?.storage;
 
-        if (!React || !ReactNative || !storage) return null;
+        if (!React || !ReactNative || !pluginStorage) return null;
 
-        if (vendetta?.storage?.useProxy) {
-            vendetta.storage.useProxy(storage);
+        // Initialize our storage variable if it's completely empty
+        if (pluginStorage.marginSize === undefined) {
+            pluginStorage.marginSize = 25;
         }
+
+        // Use React to hold the text box value so it doesn't crash
+        const [marginText, setMarginText] = React.useState(String(pluginStorage.marginSize));
 
         return React.createElement(ReactNative.View, { style: { padding: 16 } }, [
             React.createElement(ReactNative.Text, { 
@@ -36,17 +31,20 @@
                 keyboardType: "numeric",
                 placeholder: "25",
                 placeholderTextColor: "#72767d",
-                value: String(storage.marginSize ?? 25),
+                value: marginText,
                 onChangeText: (text) => {
+                    // Update the UI
+                    setMarginText(text);
+                    // Save the actual number to Revenge's storage
                     const num = parseInt(text.replace(/[^0-9]/g, ''));
-                    storage.marginSize = isNaN(num) ? 0 : num;
+                    pluginStorage.marginSize = isNaN(num) ? 0 : num;
                 }
             }),
 
             React.createElement(ReactNative.Text, { 
                 key: "hint", 
                 style: { color: "#b9bbbe", fontSize: 14, marginTop: 8 } 
-            }, "Change this number to push the server list further right.")
+            }, "Change this number to push the server list further right. Note: You must fully restart Discord to see the changes take effect.")
         ]);
     }
 
@@ -55,14 +53,14 @@
         settings: Settings,
         onLoad: () => {
             try {
-                const { metro, patcher } = vendetta;
-                const storage = getStorage();
+                const { metro, patcher, plugin } = vendetta;
                 const GuildListView = metro?.findByName("GuildListView", false);
                 
                 if (GuildListView && patcher) {
                     unpatch = patcher.after("default", GuildListView, (args, res) => {
                         if (res && res.props) {
-                            const margin = storage?.marginSize ?? 25;
+                            // Safely pull the margin size, default to 25 if something goes wrong
+                            const margin = plugin?.storage?.marginSize ?? 25;
                             res.props.style = [res.props.style, { marginLeft: margin }];
                         }
                     });
