@@ -3,7 +3,6 @@
 
     let unpatch;
 
-    // 1. Settings UI
     function Settings() {
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
@@ -18,7 +17,7 @@
             React.createElement(ReactNative.Text, { 
                 key: "label", 
                 style: { color: "#FFFFFF", fontSize: 16, marginBottom: 8, fontWeight: "bold" } 
-            }, "Screen Edge Offset (Pixels):"),
+            }, "Global Screen Margin (Pixels):"),
             
             React.createElement(ReactNative.TextInput, {
                 key: "input",
@@ -36,39 +35,51 @@
             React.createElement(ReactNative.Text, { 
                 key: "hint", 
                 style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
-            }, "⚠️ This hacks the native Safe Area Insets to trick Discord into thinking your phone has a massive left notch. It completely bypasses Discord's strict layout engine!")
+            }, "⚠️ This wraps the absolute root of the app to bypass Discord's strict layout engine. A FULL RESTART is required after changing this number.")
         ]);
     }
 
-    // 2. Core Plugin
     const MarginFix = {
         settings: Settings,
         onLoad: () => {
             try {
-                // Find React Native's core Safe Area module
-                const SafeArea = v.metro.findByProps("useSafeAreaInsets");
+                const React = v.metro.common.React;
+                const ReactNative = v.metro.common.ReactNative;
                 
-                if (!SafeArea || !SafeArea.useSafeAreaInsets) {
-                    v.ui.toasts.showToast("MarginFix: SafeArea API not found", 1);
-                    return;
+                // Target 1: The React Native App Root (The absolute highest level component)
+                const AppContainer = v.metro.findByName("AppContainer", false);
+                
+                // Target 2: The Safe Area Root (Fallback if AppContainer is obscured)
+                const SafeAreaModule = v.metro.findByProps("SafeAreaProvider");
+
+                // The function that forcefully shrinks the app canvas
+                const applyGlobalMargin = (res) => {
+                    const margin = v.plugin.storage.marginSize ?? 25;
+                    return React.createElement(
+                        ReactNative.View, 
+                        // Flex 1 ensures it fills the screen, padding compresses the app inside it
+                        { style: { flex: 1, paddingLeft: margin, backgroundColor: "#000000" } }, 
+                        res
+                    );
+                };
+
+                // Inject the patch into whichever root component we find first
+                if (AppContainer && AppContainer.prototype && AppContainer.prototype.render) {
+                    unpatch = v.patcher.after("render", AppContainer.prototype, (args, res) => {
+                        return applyGlobalMargin(res);
+                    });
+                } 
+                else if (SafeAreaModule && SafeAreaModule.SafeAreaProvider) {
+                    unpatch = v.patcher.after("SafeAreaProvider", SafeAreaModule, (args, res) => {
+                        return applyGlobalMargin(res);
+                    });
+                } 
+                else {
+                    v.ui.toasts.showToast("MarginFix: Could not find Root container!", 1);
                 }
 
-                // Intercept every time Discord asks the phone where the edges are
-                unpatch = v.patcher.after("useSafeAreaInsets", SafeArea, (args, res) => {
-                    if (res) {
-                        const margin = v.plugin.storage.marginSize ?? 25;
-                        
-                        // Forcefully inject our custom margin into the left boundary
-                        return {
-                            ...res,
-                            left: (res.left || 0) + margin
-                        };
-                    }
-                    return res;
-                });
-
             } catch (err) {
-                console.error("[MarginFix] SafeArea patch error:", err);
+                console.error("[MarginFix] Fatal error:", err);
             }
         },
         onUnload: () => {
