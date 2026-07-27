@@ -7,19 +7,15 @@
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
 
+        // Default to 25px margin and your specific brownish theme color
         if (v.plugin.storage.marginSize === undefined) v.plugin.storage.marginSize = 25;
         if (v.plugin.storage.marginColor === undefined) v.plugin.storage.marginColor = "#1c1814";
 
         const [marginText, setMarginText] = React.useState(String(v.plugin.storage.marginSize));
         const [colorText, setColorText] = React.useState(v.plugin.storage.marginColor);
 
-        return React.createElement(ReactNative.ScrollView, { style: { padding: 16, flex: 1 } }, [
+        return React.createElement(ReactNative.View, { style: { padding: 16, flex: 1 } }, [
             
-            React.createElement(ReactNative.Text, { 
-                key: "warning", 
-                style: { color: "#f04747", fontSize: 14, marginBottom: 16, fontWeight: "bold" } 
-            }, "Smart Mode has been removed for stability. Using rock-solid Always-On mode."),
-
             // --- MARGIN TEXTBOX ---
             React.createElement(ReactNative.Text, { 
                 key: "labelSize", 
@@ -51,12 +47,21 @@
                 placeholder: "#1c1814",
                 placeholderTextColor: "#72767d",
                 onChangeText: (text) => {
+                    // Update the text box on your screen
                     setColorText(text);
+                    
+                    // SAFETY CHECK: Only push the color to Discord if it is a valid Hex Code
+                    // This prevents React Native from crashing if you type an incomplete color!
                     if (/^#([0-9A-F]{3,8})$/i.test(text.trim())) {
                         v.plugin.storage.marginColor = text.trim();
                     }
                 }
-            })
+            }),
+
+            React.createElement(ReactNative.Text, { 
+                key: "hint", 
+                style: { color: "#b9bbbe", fontSize: 14, marginTop: 12 } 
+            }, "Type any hex color code. The bar will seamlessly update in the background!")
         ]);
     }
 
@@ -74,11 +79,9 @@
                     const margin = v.plugin.storage.marginSize ?? 25;
                     const color = v.plugin.storage.marginColor || "#1c1814";
                     
-                    // If margin is 0, don't render the color box at all
-                    if (margin <= 0) return res;
-
                     return React.createElement(
                         ReactNative.View, 
+                        // The backgroundColor is dynamically pulled from your textbox!
                         { style: { flex: 1, paddingLeft: margin, backgroundColor: color } }, 
                         res
                     );
