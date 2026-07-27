@@ -1,0 +1,6 @@
+{
+    "name": "Margin Fix",
+    "description": "Pushes the server list away from the screen edge.",
+    "authors": [{"name": "You"}],
+    "main": "index.js"
+}
