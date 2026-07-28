@@ -24,7 +24,7 @@
             React.createElement(ReactNative.View, { key: "debugToggle", style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, backgroundColor: "#202225", padding: 12, borderRadius: 8 } }, [
                 React.createElement(ReactNative.View, { style: { flex: 1, paddingRight: 16 } }, [
                     React.createElement(ReactNative.Text, { style: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" } }, "Show On-Screen Debug Overlay"),
-                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "Displays a small green badge at the top of your screen showing Discord's current internal route name in real-time.")
+                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "You can safely turn this off now!")
                 ]),
                 React.createElement(ReactNative.Switch, {
                     value: showDebug,
@@ -39,7 +39,7 @@
             React.createElement(ReactNative.View, { key: "smartToggle", style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24, backgroundColor: "#202225", padding: 12, borderRadius: 8 } }, [
                 React.createElement(ReactNative.View, { style: { flex: 1, paddingRight: 16 } }, [
                     React.createElement(ReactNative.Text, { style: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" } }, "Smart Mode (Auto-Hide)"),
-                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "Automatically hides the margin when you enter a chat screen.")
+                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "Only applies the margin when looking at the Server List.")
                 ]),
                 React.createElement(ReactNative.Switch, {
                     value: smartMode,
@@ -87,14 +87,14 @@
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
         
-        const [isMainScreen, setIsMainScreen] = React.useState(true);
+        const [isMainScreen, setIsMainScreen] = React.useState(false);
         const [routeName, setRouteName] = React.useState("Booting...");
 
         React.useEffect(() => {
             const navModule = v.metro.findByProps("getRootNavigationRef");
             
             const checkState = () => {
-                let active = true; 
+                let active = false; // Default to OFF so chats stay clean
 
                 if (!navModule) {
                     setRouteName("Nav API Missing");
@@ -109,11 +109,9 @@
                         if (route && route.name) {
                             setRouteName(route.name);
                             
-                            const name = route.name.toLowerCase();
-                            
-                            // BLACKLIST: Hides the margin on these screens
-                            if (name.includes("chat") || name.includes("settings") || name.includes("profile") || name.includes("thread")) {
-                                active = false;
+                            // WHITELIST: Explicitly turn ON only for the server list
+                            if (route.name.toLowerCase() === "guilds") {
+                                active = true;
                             }
                         } else {
                             setRouteName("Unknown Route");
