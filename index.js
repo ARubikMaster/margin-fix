@@ -3,7 +3,7 @@
 
     let unpatch;
     
-    // Telemetry so we can see what Discord is actually calling your screens
+    // Telemetry
     let currentRouteName = "Booting...";
 
     // --- 1. SETTINGS UI ---
@@ -20,7 +20,6 @@
         const [smartMode, setSmartMode] = React.useState(v.plugin.storage.smartMode);
         const [liveRoute, setLiveRoute] = React.useState(currentRouteName);
 
-        // Ping the router twice a second to update the debug text
         React.useEffect(() => {
             const interval = setInterval(() => setLiveRoute(currentRouteName), 500);
             return () => clearInterval(interval);
@@ -89,30 +88,33 @@
         const [isMainScreen, setIsMainScreen] = React.useState(true);
 
         React.useEffect(() => {
-            const navModule = v.metro.findByProps("getNavigationRef");
+            // THE FIX: Looking for getRootNavigationRef instead!
+            const navModule = v.metro.findByProps("getRootNavigationRef");
             
             const checkState = () => {
-                let active = true; // Assume we want the margin on by default
+                let active = true; 
 
                 if (!navModule) {
                     currentRouteName = "Nav API Missing";
-                } else if (!navModule.getNavigationRef) {
+                } else if (!navModule.getRootNavigationRef) {
                     currentRouteName = "Ref API Missing";
                 } else {
-                    const nav = navModule.getNavigationRef();
+                    const nav = navModule.getRootNavigationRef();
                     if (!nav || !nav.isReady || !nav.isReady()) {
                         currentRouteName = "Router Not Ready";
                     } else {
                         const route = nav.getCurrentRoute();
                         if (route && route.name) {
-                            currentRouteName = route.name; // Export to the settings page!
+                            currentRouteName = route.name; 
                             
                             const name = route.name.toLowerCase();
                             
-                            // BLACKLIST: If the screen is a chat, settings, or profile, turn the margin OFF
+                            // BLACKLIST: Hides the margin on these screens
                             if (name.includes("chat") || name.includes("settings") || name.includes("profile") || name.includes("thread")) {
                                 active = false;
                             }
+                        } else {
+                            currentRouteName = "Unknown Route";
                         }
                     }
                 }
@@ -120,7 +122,6 @@
                 setIsMainScreen(active);
             };
 
-            // Run the check 5 times a second in the background
             const interval = setInterval(checkState, 200);
             checkState();
             return () => clearInterval(interval);
@@ -130,7 +131,6 @@
         const color = v.plugin.storage.marginColor || "#1c1814";
         const isSmart = v.plugin.storage.smartMode !== false;
 
-        // Apply logic
         const shouldApply = isSmart ? isMainScreen : true;
 
         return React.createElement(
