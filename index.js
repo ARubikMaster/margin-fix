@@ -81,8 +81,8 @@
             })
         ]);
     }
-
-    // --- 2. THE DYNAMIC ROOT WRAPPER ---
+    
+    // --- 2. THE DYNAMIC ROOT WRAPPER (ZERO LATENCY) ---
     function RootWrapper({ children }) {
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
@@ -94,7 +94,7 @@
             const navModule = v.metro.findByProps("getRootNavigationRef");
             
             const checkState = () => {
-                let active = false; // Default to OFF so chats stay clean
+                let active = false;
 
                 if (!navModule) {
                     setRouteName("Nav API Missing");
@@ -109,7 +109,7 @@
                         if (route && route.name) {
                             setRouteName(route.name);
                             
-                            // WHITELIST: Explicitly turn ON only for the server list
+                            // WHITELIST
                             if (route.name.toLowerCase() === "guilds") {
                                 active = true;
                             }
@@ -119,12 +119,33 @@
                     }
                 }
 
-                setIsMainScreen(active);
+                // Only trigger a React update if the state ACTUALLY changed
+                // This prevents your phone from burning battery rendering the same frame
+                setIsMainScreen((prev) => {
+                    if (prev !== active) return active;
+                    return prev;
+                });
             };
 
-            const interval = setInterval(checkState, 200);
+            // 1. THE FAST FALLBACK: Drop the delay from 200ms to 50ms (visually instant)
+            const interval = setInterval(checkState, 50);
+            
+            // 2. THE INSTANT TRIGGER: Hook directly into React Navigation's state events
+            let unsubscribe = null;
+            if (navModule && navModule.getRootNavigationRef) {
+                const nav = navModule.getRootNavigationRef();
+                // When Discord says "I am switching screens", instantly fire our function
+                if (nav && nav.addListener) {
+                    unsubscribe = nav.addListener('state', checkState);
+                }
+            }
+
             checkState();
-            return () => clearInterval(interval);
+
+            return () => {
+                clearInterval(interval);
+                if (unsubscribe) unsubscribe();
+            };
         }, []);
 
         const margin = v.plugin.storage.marginSize ?? 25;
@@ -140,7 +161,6 @@
             [
                 children,
 
-                // --- FLOATING DEBUG OVERLAY ---
                 showDebug && React.createElement(
                     ReactNative.View,
                     {
