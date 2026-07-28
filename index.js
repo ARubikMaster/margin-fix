@@ -2,6 +2,9 @@
     "use strict";
 
     let unpatch;
+    
+    // Telemetry so we can see what Discord is actually calling your screens
+    let currentRouteName = "Booting...";
 
     // --- 1. SETTINGS UI ---
     function Settings() {
@@ -15,14 +18,27 @@
         const [marginText, setMarginText] = React.useState(String(v.plugin.storage.marginSize));
         const [colorText, setColorText] = React.useState(v.plugin.storage.marginColor);
         const [smartMode, setSmartMode] = React.useState(v.plugin.storage.smartMode);
+        const [liveRoute, setLiveRoute] = React.useState(currentRouteName);
+
+        // Ping the router twice a second to update the debug text
+        React.useEffect(() => {
+            const interval = setInterval(() => setLiveRoute(currentRouteName), 500);
+            return () => clearInterval(interval);
+        }, []);
 
         return React.createElement(ReactNative.ScrollView, { style: { padding: 16, flex: 1 } }, [
             
-            // Smart Mode Toggle
+            // --- LIVE DEBUGGER ---
+            React.createElement(ReactNative.Text, { 
+                key: "debug", 
+                style: { color: "#43b581", fontSize: 14, marginBottom: 16, fontWeight: "bold", fontFamily: "monospace" } 
+            }, "Router Debug: " + liveRoute),
+
+            // --- SMART MODE TOGGLE ---
             React.createElement(ReactNative.View, { key: "smartToggle", style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24, backgroundColor: "#202225", padding: 12, borderRadius: 8 } }, [
                 React.createElement(ReactNative.View, { style: { flex: 1, paddingRight: 16 } }, [
-                    React.createElement(ReactNative.Text, { style: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" } }, "Smart Tracker (Router Mode)"),
-                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "Dynamically reads Discord's global navigation to only push the screen when viewing the Server List.")
+                    React.createElement(ReactNative.Text, { style: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" } }, "Smart Mode (Auto-Hide)"),
+                    React.createElement(ReactNative.Text, { style: { color: "#b9bbbe", fontSize: 12, marginTop: 4 } }, "Automatically hides the margin when you enter a chat. If it jams, check the Debug text above!")
                 ]),
                 React.createElement(ReactNative.Switch, {
                     value: smartMode,
@@ -33,7 +49,7 @@
                 })
             ]),
 
-            // Margin Size
+            // --- MARGIN SIZE ---
             React.createElement(ReactNative.Text, { key: "labelSize", style: { color: "#FFFFFF", fontSize: 16, marginBottom: 8, fontWeight: "bold" } }, "Global Screen Margin (Pixels):"),
             React.createElement(ReactNative.TextInput, {
                 key: "inputSize",
@@ -47,7 +63,7 @@
                 }
             }),
 
-            // Color Code
+            // --- COLOR CODE ---
             React.createElement(ReactNative.Text, { key: "labelColor", style: { color: "#FFFFFF", fontSize: 16, marginBottom: 8, fontWeight: "bold" } }, "Bar Color (Hex Code):"),
             React.createElement(ReactNative.TextInput, {
                 key: "inputColor",
@@ -70,42 +86,43 @@
         const React = v.metro.common.React;
         const ReactNative = v.metro.common.ReactNative;
         
-        const [isServerList, setIsServerList] = React.useState(false);
+        const [isMainScreen, setIsMainScreen] = React.useState(true);
 
         React.useEffect(() => {
-            // Find Discord's Global Navigation Systems
-            const DrawerStore = v.metro.findByStoreName("DrawerStore");
             const navModule = v.metro.findByProps("getNavigationRef");
             
             const checkState = () => {
-                let active = false;
+                let active = true; // Assume we want the margin on by default
 
-                // 1. Check Old UI (Swipe Drawer)
-                if (DrawerStore && DrawerStore.isOpen()) {
-                    active = true;
-                }
-
-                // 2. Check New UI (Tabs V2 Router)
-                if (navModule && navModule.getNavigationRef) {
+                if (!navModule) {
+                    currentRouteName = "Nav API Missing";
+                } else if (!navModule.getNavigationRef) {
+                    currentRouteName = "Ref API Missing";
+                } else {
                     const nav = navModule.getNavigationRef();
-                    if (nav && nav.isReady && nav.isReady()) {
+                    if (!nav || !nav.isReady || !nav.isReady()) {
+                        currentRouteName = "Router Not Ready";
+                    } else {
                         const route = nav.getCurrentRoute();
-                        // These are the names Discord uses internally when looking at servers
-                        if (route && (route.name === "Guilds" || route.name === "Home" || route.name === "Panels")) {
-                            active = true;
+                        if (route && route.name) {
+                            currentRouteName = route.name; // Export to the settings page!
+                            
+                            const name = route.name.toLowerCase();
+                            
+                            // BLACKLIST: If the screen is a chat, settings, or profile, turn the margin OFF
+                            if (name.includes("chat") || name.includes("settings") || name.includes("profile") || name.includes("thread")) {
+                                active = false;
+                            }
                         }
                     }
                 }
 
-                setIsServerList(active);
+                setIsMainScreen(active);
             };
 
-            // Run an unkillable background check 4 times a second
-            const interval = setInterval(checkState, 250);
-            
-            // Initial check
+            // Run the check 5 times a second in the background
+            const interval = setInterval(checkState, 200);
             checkState();
-
             return () => clearInterval(interval);
         }, []);
 
@@ -113,8 +130,8 @@
         const color = v.plugin.storage.marginColor || "#1c1814";
         const isSmart = v.plugin.storage.smartMode !== false;
 
-        // If Smart Mode is OFF, apply margin everywhere. If ON, only apply when isServerList is true.
-        const shouldApply = isSmart ? isServerList : true;
+        // Apply logic
+        const shouldApply = isSmart ? isMainScreen : true;
 
         return React.createElement(
             ReactNative.View, 
